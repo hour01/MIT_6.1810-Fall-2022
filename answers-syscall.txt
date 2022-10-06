@@ -1,0 +1,6 @@
+usertrap()
+7,  the number for System call SYS_exec
+user mode
+lw	s2,0(zero), p->trapframe->a7
+scause:load page fault, address 0 is not the kernel address space.
+"initcode\000\000\000\000\000\000\000", 1
