@@ -1,0 +1,9 @@
+question1:
+uptime system call, it will return "ticks" defined in trap.c, we can write it into the shared page when it's changed each time.
+
+question2:
+page0: date and text of process
+page1: guard page for protect stack by present page0 overflow
+page2: stack of process
+page3 to last page: heap, trapfram, trampoline
+running in user mode, process can't read/write the page 1, cause this page is defined to detect stack overflow or prevent the use of address below the stack.
