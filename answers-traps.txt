@@ -1,0 +1,11 @@
+Q1: registers a0-a7, specifically printf use a a2 to hold 13.
+
+Q2: both are handled by inline optimization, the return value 12 and 13 are directly used in main function.
+
+Q3: 0x642.
+
+Q4: ra should hold 0x38 which is the next instruction after returnning from printf.
+
+Q5: the output is 'He110 World', for big endian we need i to be 0x726c6400.
+
+Q6: try to print the nonexistent 2nd parameter. it will keep looking from register a2 and print its value as 32bit integer.

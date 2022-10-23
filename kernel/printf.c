@@ -133,3 +133,18 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+
+void backtrace(void)
+{
+  uint64 fp = r_fp();
+  printf("backtrace:\n");
+  // printf("%p, %p, %p\n",PGROUNDDOWN(fp), PGROUNDUP(fp), fp);
+  
+  // previous fp lives at fixed offset(-16),
+  // the return address lives at a fixed offset (-8).
+  // the return address is the address of the next instruction 
+  // after returnning from this procedure.
+  for(uint64 r = fp; r < PGROUNDUP(fp); r = *((uint64*)(r - 16)))
+    printf("%p\n",*(uint64*)(r-8));
+}

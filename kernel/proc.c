@@ -125,6 +125,19 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  // initialize the alarm ticks.
+  p->past_alarm_ticks = 0;
+  p->alarm_ticks = 0;
+  p->alarm_handler = 0;
+  p->handler_execute = 0;
+
+  // Allocate a timer_trapframe page.
+  if((p->timer_trapframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -169,6 +182,12 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->past_alarm_ticks = 0;
+  p->alarm_ticks = 0;
+  p->alarm_handler = 0;
+  if(p->timer_trapframe)
+    kfree((void*)p->timer_trapframe);
+  p->handler_execute = 0;
 }
 
 // Create a user page table for a given process, with no user memory,

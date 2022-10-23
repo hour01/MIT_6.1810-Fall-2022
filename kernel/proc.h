@@ -45,7 +45,7 @@ struct trapframe {
   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
   /*  16 */ uint64 kernel_trap;   // usertrap()
   /*  24 */ uint64 epc;           // saved user program counter
-  /*  32 */ uint64 kernel_hartid; // saved kernel tp
+  /*  32 */ uint64 kernel_hartid; // saved kernel tp, which core of cpu
   /*  40 */ uint64 ra;
   /*  48 */ uint64 sp;
   /*  56 */ uint64 gp;
@@ -104,4 +104,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int alarm_ticks;             // alarm every n ticks
+  int past_alarm_ticks;        // ticks have passed since the last alarm
+  uint64 alarm_handler;        // handler for alarm
+  struct trapframe *timer_trapframe; // saves registers to resume in sigret 
+  int handler_execute;         // handler executing  => 1, handler no executing => 0
 };
