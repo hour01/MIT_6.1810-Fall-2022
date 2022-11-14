@@ -3,7 +3,8 @@
 #   void swtch(struct context *old, struct context *new);
 # 
 # Save current registers in old. Load from new.	
-
+# old is in a0, and new is in a1.
+# the other 18 register will be saved by the c compiler.(RISC-V )
 
 .globl swtch
 swtch:
@@ -37,6 +38,6 @@ swtch:
         ld s10, 96(a1)
         ld s11, 104(a1)
         
-        ret
+        ret # jump to ra, which is the new will continue.
 
 	
