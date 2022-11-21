@@ -1,0 +1,11 @@
+Q1:
+Why are there missing keys with 2 threads, but not with 1 thread?
+Identify a sequence of events with 2 threads that can lead to a key being missing. 
+
+A1:
+The keys that will be used are generated randomly and which table the key-value tuple will be put depended on the result of key%NBUCKET.
+So there is probably a case that thread1 and thread2 concurrently put a tuple into the same table, which will cause the race condition.
+Specifically, these two threads will call the insert function concurrently, which makes the missing. 
+The sequence of keys:
+Thread1: 1, 6, 11, 16.....
+Thread2: 21, 26, 31, 36...
