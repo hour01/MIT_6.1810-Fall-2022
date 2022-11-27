@@ -146,6 +146,7 @@ sys_link(void)
   iupdate(ip);
   iunlock(ip);
 
+  // after this, name hold the final path element,namex()
   if((dp = nameiparent(new, name)) == 0)
     goto bad;
   ilock(dp);
@@ -317,11 +318,29 @@ sys_open(void)
   begin_op();
 
   if(omode & O_CREATE){
-    ip = create(path, T_FILE, 0, 0);
-    if(ip == 0){
-      end_op();
-      return -1;
-    }
+    // if((ip = namei(path))>0)
+    // {
+    //   ilock(ip);
+    //   if(ip->type==T_SYMLINK)
+    //   {
+    //     ip->type = T_FILE;
+    //     ip->major=0,ip->minor=0;
+    //   }
+    //   else
+    //   {
+    //     iunlockput(ip);
+    //     ip = create(path, T_FILE, 0, 0);
+    //     if(ip == 0){
+    //       end_op();
+    //       return -1;
+    //     }    
+    //   }
+    // }
+      ip = create(path, T_FILE, 0, 0);
+      if(ip == 0){
+        end_op();
+        return -1;
+      }
   } else {
     if((ip = namei(path)) == 0){
       end_op();
@@ -332,6 +351,48 @@ sys_open(void)
       iunlockput(ip);
       end_op();
       return -1;
+    }
+  }
+
+  // follow the symbolic link
+  if(!(omode & O_NOFOLLOW) && ip->type==T_SYMLINK)
+  {
+    char target[MAXPATH];
+    //set threshold 10 to detect symbolic link cycle(recursive).
+    for(int i=0;i<10;i++)
+    {
+      if(readi(ip, 0, (uint64)target, 0, MAXPATH) <= 0)
+      {
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      // ilock(tmp);
+      iunlockput(ip);
+      if((ip = namei(target)) == 0) {
+        // FAILURE: Symlinking to nonexistent file should succeed
+        // if((ip=create(target, T_SYMLINK,0,0))==0)
+        // {
+        //   end_op();
+        //   return -1;
+        // }
+        end_op();
+        return -1;
+      }
+      if(!holdingsleep(&ip->lock)){
+        ilock(ip);
+      }
+      if(ip->type!=T_SYMLINK)
+        break;
+      // do not use the iunlockput
+      // iunlock(tmp);
+    }
+    // it's a symbolic link cycyle
+    if(ip->type==T_SYMLINK || ip->nlink==0)
+    {
+        iunlockput(ip);
+        end_op();
+        return -1;
     }
   }
 
@@ -501,5 +562,59 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64 sys_symlink(void)
+{
+  char path[MAXPATH], target[MAXPATH];
+  int n;
+  struct inode *ip;
+
+  if((n=argstr(0, target, MAXPATH)) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+  begin_op();
+  // FAILURE: Symlinking to nonexistent file should succeed
+  // if((ip_target = namei(target)) == 0){
+  //   if((ip_target = create(target, T_SYMLINK, 0, 0)) == 0)
+  //   {
+  //     end_op();
+  //     return -1;
+  //   }
+  // }
+  // if(!holdingsleep(&ip_target->lock)){
+  //   ilock(ip_target);
+  // }
+  // if(ip_target->type == T_DIR){
+  //   iunlockput(ip_target);
+  //   end_op();
+  //   return -1;
+  // }
+
+  //if((ip = namei(path)) == 0){
+    // creat a new one 
+    if((ip = create(path, T_SYMLINK, 0, 0))==0)
+    {
+      end_op();
+      return -1;
+    }
+  //}
+  if(!holdingsleep(&ip->lock)){
+    ilock(ip);
+  }
+
+
+  // write target's path name to the ip's data block
+  if(writei(ip, 0, (uint64)target, 0, n) != n)
+  {
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  //iupdate(ip);
+  iunlockput(ip);
+  // iunlockput(ip_target);
+  end_op();
+
   return 0;
 }

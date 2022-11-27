@@ -321,7 +321,7 @@ void
 iunlock(struct inode *ip)
 {
   if(ip == 0 || !holdingsleep(&ip->lock) || ip->ref < 1)
-    panic("iunlock");
+    printf("%d,%d,%d\n",ip,holdingsleep(&ip->lock),ip->ref),panic("iunlock");
 
   releasesleep(&ip->lock);
 }
@@ -416,6 +416,43 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn -= NINDIRECT;
+
+  // Load doubly-indirect block, allocating if necessary.
+  if(bn < NDINDIRECT)
+  {
+    uint bn_first = bn/NINDIRECT;
+    uint bn_second = bn%NINDIRECT;
+    // first level
+    if((addr = ip->addrs[NDIRECT+1]) == 0){
+      addr = balloc(ip->dev);
+      if(addr == 0)
+        return 0;
+      ip->addrs[NDIRECT+1] = addr;
+    }
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[bn_first]) == 0){
+      addr = balloc(ip->dev);
+      if(addr){
+        a[bn_first] = addr;
+        log_write(bp);
+      }
+    }
+    brelse(bp);
+    // second level
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[bn_second]) == 0){
+      addr = balloc(ip->dev);
+      if(addr){
+        a[bn_second] = addr;
+        log_write(bp);
+      }
+    }
+    brelse(bp);
+    return addr;
+  }
 
   panic("bmap: out of range");
 }
@@ -426,8 +463,8 @@ void
 itrunc(struct inode *ip)
 {
   int i, j;
-  struct buf *bp;
-  uint *a;
+  struct buf *bp,*bp_1;
+  uint *a,*a_1;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
@@ -446,6 +483,29 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  // doubly-indirect block
+  if(ip->addrs[NDIRECT+1]){
+    bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    a = (uint*)bp->data;
+    for(j = 0; j < NINDIRECT; j++){
+      if(a[j])
+      {
+        bp_1 = bread(ip->dev, a[j]);
+        a_1 = (uint*)bp_1->data;
+        for(int k=0;k<NINDIRECT;k++)
+        {
+          if(a_1[k])
+            bfree(ip->dev,a_1[k]);
+        }
+        brelse(bp_1);
+        bfree(ip->dev, a[j]);
+      }  
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT+1] = 0;
   }
 
   ip->size = 0;
@@ -683,13 +743,14 @@ namex(char *path, int nameiparent, char *name)
   return ip;
 }
 
+// path= a/b/c, return the c's inode
 struct inode*
 namei(char *path)
 {
   char name[DIRSIZ];
   return namex(path, 0, name);
 }
-
+// path= a/b/c, return the b's inode
 struct inode*
 nameiparent(char *path, char *name)
 {
