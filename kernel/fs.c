@@ -695,3 +695,16 @@ nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
 }
+
+// readi for outer-file
+int read_inode(struct file *f, int user_dst, uint64 dst, uint off, uint n)
+{
+  ilock(f->ip);
+  if(readi(f->ip, 1, dst, off, n) == 0)
+  {
+    iunlock(f->ip);
+    return -1;
+  }
+  iunlock(f->ip);
+  return 0;
+}

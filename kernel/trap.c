@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -27,6 +28,52 @@ void
 trapinithart(void)
 {
   w_stvec((uint64)kernelvec);
+}
+
+int mmap_lazyalloc(uint64 va)
+{
+  struct proc *p = myproc();
+
+  // find the specific vma
+  int idx;
+  for(idx=0;idx<MAXVMA;idx++)
+    if(p->vmas[idx].valid && p->vmas[idx].addr <= va 
+          && va < (p->vmas[idx].addr+p->vmas[idx].length))
+      break;
+  if(idx == MAXVMA)
+    return -1;
+
+  // get the permission
+  struct file *f = p->vmas[idx].f;
+  int prot = p->vmas[idx].prot;
+  int perm = PTE_U;
+  if(prot & PROT_READ)
+    perm |= PTE_R;
+  if(prot & PROT_WRITE)
+    perm |= PTE_W;
+  if(prot & PROT_EXEC)
+    perm |= PTE_X;
+
+  if(va >= myproc()->sz || va <= PGROUNDDOWN(myproc()->trapframe->sp))
+    return -1;
+
+  char *mem;
+  mem = kalloc();
+  if(mem == 0)
+    return -1;
+  memset(mem, 0, PGSIZE);
+
+  // map
+  if(mappages(myproc()->pagetable, va, PGSIZE, (uint64)mem, perm) != 0){
+    kfree(mem);
+    uvmdealloc(myproc()->pagetable, va+PGSIZE, va);
+    return -1;
+  }
+
+  // read from file, write to memory
+  if(read_inode(f, 1, va, va - p->vmas[idx].addr, PGSIZE) != 0)
+    return -1;
+  return 0;
 }
 
 //
@@ -65,7 +112,14 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  } else if(r_scause() == 13 || r_scause() == 15){
+    // page fault, lazy alloction
+    if (mmap_lazyalloc(r_stval())==-1)
+    { printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      setkilled(p);
+    }
+  }else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

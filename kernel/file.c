@@ -180,3 +180,7 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+int file_writable(struct file *f)
+{
+  return f->writable;
+}

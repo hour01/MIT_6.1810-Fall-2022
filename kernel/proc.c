@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -302,6 +303,16 @@ fork(void)
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
+  // mmap
+  for(int i=0;i<MAXVMA;i++)
+  {
+    if(p->vmas[i].valid)
+    {
+      memmove(&(np->vmas[i]), &(p->vmas[i]), sizeof(p->vmas[i]));
+      filedup(p->vmas[i].f);
+    }
+  }
+
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
@@ -351,6 +362,28 @@ exit(int status)
   if(p == initproc)
     panic("init exiting");
 
+  // munmap
+  for(int idx=0;idx<MAXVMA;idx++)
+  {
+    if(p->vmas[idx].valid)
+    {
+      for(int addr_tmp = p->vmas[idx].addr;
+          addr_tmp < p->vmas[idx].addr+p->vmas[idx].length;addr_tmp+=PGSIZE)
+      {
+        if(walkaddr(p->pagetable, addr_tmp) != 0)
+        {
+          // write back to file
+          if((p->vmas[idx].flags == MAP_SHARED && (p->vmas[idx].prot & PROT_WRITE)) 
+              && filewrite(p->vmas[idx].f, addr_tmp, PGSIZE) == -1)
+            panic("exit-munmap");
+          uvmunmap(p->pagetable,addr_tmp,1,1);
+        }
+      }
+      fileclose(p->vmas[idx].f);
+      p->vmas[idx].valid = 0;
+    }
+  }
+  
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){

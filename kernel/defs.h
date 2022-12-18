@@ -33,6 +33,7 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
+int             file_writable(struct file*);
 
 // fs.c
 void            fsinit(int);
@@ -53,6 +54,7 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
+int             read_inode(struct file*, int, uint64, uint, uint);
 
 // ramdisk.c
 void            ramdiskinit(void);
@@ -141,12 +143,16 @@ int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
 
+// sysfile.c
+int argfd(int , int* , struct file** );
+
 // trap.c
 extern uint     ticks;
 void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
+int             mmap_lazyalloc(uint64);
 
 // uart.c
 void            uartinit(void);
